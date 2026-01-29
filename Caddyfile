@@ -1,0 +1,10 @@
+:8080
+
+root * C:\bot-dashboard-full-testlunch\frontend\dist
+file_server
+
+@api path /api/*
+reverse_proxy @api localhost:4000 {
+  header_up X-Forwarded-Proto https
+  header_up X-Forwarded-Host arty-dashbord.com
+}

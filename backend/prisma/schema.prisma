@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Panel {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  command     String?  // <- optional gemacht
+  roles       Role[]
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  label     String
+  roleId    String
+  panel     Panel?   @relation(fields: [panelId], references: [id])
+  panelId   String?
+
+  count     Int      @default(0) // 👈 Statistikfeld
+}
+
+model AuditLogEntry {
+  id        String   @id @default(cuid())
+  type      String
+  userId    String
+  username  String
+  message   String
+  timestamp DateTime @default(now())
+}
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  username  String
+  roleId    String
+  roleName  String
+  action    String   // "hinzugefügt" oder "entfernt"
+  panelId   String?
+  timestamp DateTime @default(now())
+}
+model AdminUser {
+  id        String   @id @default(cuid())
+  discordId String   @unique
+  username  String
+  addedAt   DateTime @default(now())
+}
+model AdminSetting {
+  key   String @id
+  value String
+}
