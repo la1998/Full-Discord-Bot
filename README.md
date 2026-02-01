@@ -83,7 +83,7 @@ Backend:
 
 ## ▶️ Starten
 
-    start-all.bat
+    start.bat
 
 Startet: - Backend - Caddy - Cloudflare Tunnel - Discord Bot
 
