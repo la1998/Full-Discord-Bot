@@ -54,11 +54,11 @@ Windows (VM / Homelab).
 Datei: `backend/.env` (nicht committen)
 
     PORT=4000
-    FRONTEND_URL=https://arty-dashbord.com
+    FRONTEND_URL=(deineDomein)
 
     DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
     DISCORD_CLIENT_SECRET=YOUR_DISCORD_CLIENT_SECRET
-    DISCORD_REDIRECT_URI=https://arty-dashbord.com/api/auth/callback
+    DISCORD_REDIRECT_URI=(deine Domain)/api/auth/callback
 
     SESSION_SECRET=CHANGE_ME
     COOKIE_SECURE=true
@@ -92,8 +92,8 @@ Startet: - Backend - Caddy - Cloudflare Tunnel - Discord Bot
 ## 🌍 Zugriff
 
 -   Lokal: http://127.0.0.1:8080
--   Öffentlich: https://arty-dashbord.com
--   Login: https://arty-dashbord.com/api/auth/login
+-   Öffentlich: deine Domain
+-   Login: (deine domain)/api/auth/login
 
 ------------------------------------------------------------------------
 
