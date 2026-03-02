@@ -38,19 +38,21 @@ passport.use(
 function setupSession(app) {
   app.set('trust proxy', 1);
 
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
+  app.use(session({
+    name: 'arty.sid',
+    secret: process.env.SESSION_SECRET || 'CHANGE_ME_NOW',
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
 
-  proxy: true, // <<< wichtig hinter Cloudflare/Caddy
+    cookie: {
+      httpOnly: true,
+      secure: true,     // <-- FIX: immer true hinter Cloudflare HTTPS
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 24, // 1 Tag
+    }
+  }));
 
-  cookie: {
-    secure: process.env.COOKIE_SECURE === 'true', // <<< eindeutig
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24
-  }
-}));
   app.use(passport.initialize());
   app.use(passport.session());
 }
@@ -58,10 +60,27 @@ app.use(session({
 // === Auth-Routen ===
 router.get('/login', passport.authenticate('discord'));
 
-router.get('/callback', passport.authenticate('discord', {
-  failureRedirect: (process.env.FRONTEND_URL || '/'),
-  successRedirect: (process.env.FRONTEND_URL || '/'),
-}));
+router.get('/callback', (req, res, next) => {
+  passport.authenticate('discord', (err, user) => {
+    if (err || !user) {
+      return res.redirect(process.env.FRONTEND_URL || '/');
+    }
+
+    req.logIn(user, (err) => {
+      if (err) {
+        return res.redirect(process.env.FRONTEND_URL || '/');
+      }
+
+      // 🔒 WICHTIG: Session explizit speichern
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+        }
+        return res.redirect(process.env.FRONTEND_URL || '/');
+      });
+    });
+  })(req, res, next);
+});
 
 router.get('/success', (req, res) => {
   res.send('<h2>✅ Erfolgreich eingeloggt!</h2><script>setTimeout(() => window.close(), 1000)</script>');

@@ -1,10 +1,16 @@
-:8080
+:8080 {
+	# API: Prefix behalten!
+	handle /api/* {
+		reverse_proxy 127.0.0.1:4000 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host arty-dashbord.com
+		}
+	}
 
-root * C:\bot-dashboard-full-testlunch\frontend\dist
-file_server
-
-@api path /api/*
-reverse_proxy @api localhost:4000 {
-  header_up X-Forwarded-Proto https
-  header_up X-Forwarded-Host arty-dashbord.com
+	# Frontend SPA
+	handle {
+		root * C:\bot-dashboard-full-V2\frontend\dist
+		try_files {path} /index.html
+		file_server
+	}
 }
