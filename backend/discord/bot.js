@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const {
   Client,
@@ -19,6 +18,10 @@ const prisma = new PrismaClient();
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
+
+// ✅ ZENTRAL: Gamer/in Rolle (Spacer)
+// Fallback verhindert Crash, falls .env fehlt
+const GAMER_ROLE_ID = process.env.GAMER_ROLE_ID || '1291350678098153473';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
@@ -52,7 +55,7 @@ client.once(Events.ClientReady, () => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu()) return;
 
-  // Zugriffsbeschränkung: Nur Administratoren dürfen /panel verwenden
+  // 🔐 Zugriffsbeschränkung
   if (interaction.isChatInputCommand() && interaction.commandName === 'panel') {
     const member = await interaction.guild.members.fetch(interaction.user.id);
     if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -72,10 +75,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         .setLabel(panel.name)
         .setValue(panel.id);
 
-      if (panel.description && panel.description.length > 0) {
+      if (panel.description) {
         option.setDescription(panel.description.slice(0, 100));
       }
-
       return option;
     });
 
@@ -84,19 +86,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       .setPlaceholder('🔽 Wähle ein Panel zur Veröffentlichung')
       .addOptions(panelOptions);
 
-    const row = new ActionRowBuilder().addComponents(menu);
-
     return interaction.reply({
       content: 'Wähle ein Panel, das gepostet werden soll:',
-      components: [row],
+      components: [new ActionRowBuilder().addComponents(menu)],
       ephemeral: true
     });
   }
 
+  // 📦 Panel-Auswahl
   if (interaction.isStringSelectMenu() && interaction.customId === 'panel-selector') {
-    const selectedPanelId = interaction.values[0];
     const panel = await prisma.panel.findUnique({
-      where: { id: selectedPanelId },
+      where: { id: interaction.values[0] },
       include: { roles: true }
     });
 
@@ -104,98 +104,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.reply({ content: '❌ Panel oder Rollen nicht gefunden.', ephemeral: true });
     }
 
-    const roleOptions = panel.roles.map(role =>
-      new StringSelectMenuOptionBuilder()
-        .setLabel(role.label)
-        .setValue(role.roleId)
-    );
-
     const roleMenu = new StringSelectMenuBuilder()
-      .setCustomId(`role-selector-${panel.id}`)
-      .setPlaceholder('🎭 Wähle deine Rolle')
-      .addOptions(roleOptions);
-
-    const row = new ActionRowBuilder().addComponents(roleMenu);
-
-    return interaction.reply({
-      content: `📌 **${panel.name}**\n${panel.description || ''}`,
-      components: [row],
-      ephemeral: false
-    });
-  }
-
-  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('role-selector-')) {
-    const selectedRoleId = interaction.values[0];
-    const guild = interaction.guild;
-    const member = await guild.members.fetch(interaction.user.id);
-
-    const role = guild.roles.cache.get(selectedRoleId);
-    if (!role) {
-      return interaction.reply({ content: '❌ Diese Rolle existiert nicht mehr.', ephemeral: true });
-    }
-
-   let action = '';
-
-try {
-  // Bot braucht Manage Roles
-  const me = guild.members.me ?? (await guild.members.fetch(client.user.id));
-  if (!me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
-    return interaction.reply({
-      content: "❌ Bot hat keine Berechtigung: **Rollen verwalten** (Manage Roles).",
-      ephemeral: true,
-    });
-  }
-
-  // Zielrolle muss unter der höchsten Bot-Rolle liegen
-  const botHighest = me.roles.highest;
-  if (botHighest.position <= role.position) {
-    return interaction.reply({
-      content: `❌ Ich darf diese Rolle nicht vergeben, weil meine höchste Rolle (**${botHighest.name}**) unter/gleich der Zielrolle (**${role.name}**) liegt.\n➡️ Bitte Bot-Rolle im Server über die Zielrolle schieben.`,
-      ephemeral: true,
-    });
-  }
-
-  if (member.roles.cache.has(selectedRoleId)) {
-    await member.roles.remove(selectedRoleId);
-    action = 'entfernt';
-  } else {
-    await member.roles.add(selectedRoleId);
-    action = 'hinzugefügt';
-  }
-} catch (err) {
-  console.error("[Role Toggle] Failed:", err);
-  return interaction.reply({
-    content: "❌ Konnte Rolle nicht ändern (fehlende Rechte oder Rollen-Hierarchie) Bitte melde dies per Support ticket.",
-    ephemeral: true,
-  });
-}
-
-    const panelId = interaction.customId.replace('role-selector-', '');
-    const panel = await prisma.panel.findUnique({
-      where: { id: panelId },
-      include: { roles: true }
-    });
-
-    // 📈 Logging und Statistik aktualisieren
-    await prisma.auditLog.create({
-      data: {
-        userId: member.id,
-        username: member.user.username,
-        roleId: role.id,
-        roleName: role.name,
-        action: action,
-        panelId: panel.id
-      }
-    });
-
-    await prisma.role.updateMany({
-      where: { roleId: role.id },
-      data: {
-        count: { increment: action === 'hinzugefügt' ? 1 : -1 }
-      }
-    });
-
-    const refreshedMenu = new StringSelectMenuBuilder()
       .setCustomId(`role-selector-${panel.id}`)
       .setPlaceholder('🎭 Wähle deine Rolle')
       .addOptions(
@@ -206,11 +115,112 @@ try {
         )
       );
 
-    const row = new ActionRowBuilder().addComponents(refreshedMenu);
+    return interaction.reply({
+      content: `📌 **${panel.name}**\n${panel.description || ''}`,
+      components: [new ActionRowBuilder().addComponents(roleMenu)],
+      ephemeral: false
+    });
+  }
+
+  // 🎭 ROLE TOGGLE (HIER IST DIE ÄNDERUNG)
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('role-selector-')) {
+    const selectedRoleId = interaction.values[0];
+    const guild = interaction.guild;
+    const member = await guild.members.fetch(interaction.user.id);
+
+    const role = guild.roles.cache.get(selectedRoleId);
+    if (!role) {
+      return interaction.reply({ content: '❌ Diese Rolle existiert nicht mehr.', ephemeral: true });
+    }
+
+    let action = '';
+
+    try {
+      const me = guild.members.me ?? await guild.members.fetch(client.user.id);
+      if (!me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+        return interaction.reply({
+          content: '❌ Bot fehlt die Berechtigung **Rollen verwalten**.',
+          ephemeral: true,
+        });
+      }
+
+      const botHighest = me.roles.highest;
+      if (botHighest.position <= role.position) {
+        return interaction.reply({
+          content: `❌ Ich darf diese Rolle nicht vergeben (Rollen-Hierarchie).`,
+          ephemeral: true,
+        });
+      }
+
+      if (member.roles.cache.has(selectedRoleId)) {
+        // ➖ Entfernen → Gamer/in bleibt UNBERÜHRT
+        await member.roles.remove(selectedRoleId);
+        action = 'entfernt';
+      } else {
+        // ➕ Hinzufügen → Gamer/in sicherstellen
+        try {
+          const gamerRole = guild.roles.cache.get(GAMER_ROLE_ID);
+          if (
+            gamerRole &&
+            !member.roles.cache.has(GAMER_ROLE_ID) &&
+            botHighest.position > gamerRole.position
+          ) {
+            await member.roles.add(GAMER_ROLE_ID);
+          }
+        } catch (e) {
+          console.warn('[Gamer/in AutoAdd] Ignoriert:', e.message);
+        }
+
+        await member.roles.add(selectedRoleId);
+        action = 'hinzugefügt';
+      }
+    } catch (err) {
+      console.error('[Role Toggle] Failed:', err);
+      return interaction.reply({
+        content: '❌ Konnte Rolle nicht ändern (Rechte oder Hierarchie).',
+        ephemeral: true,
+      });
+    }
+
+    const panelId = interaction.customId.replace('role-selector-', '');
+    const panel = await prisma.panel.findUnique({
+      where: { id: panelId },
+      include: { roles: true }
+    });
+
+    // 📈 Logging
+    await prisma.auditLog.create({
+      data: {
+        userId: member.id,
+        username: member.user.username,
+        roleId: role.id,
+        roleName: role.name,
+        action,
+        panelId: panel.id
+      }
+    });
+
+    await prisma.role.updateMany({
+      where: { roleId: role.id },
+      data: { count: { increment: action === 'hinzugefügt' ? 1 : -1 } }
+    });
 
     await interaction.update({
       content: `📌 **${panel.name}**\n${panel.description || ''}`,
-      components: [row]
+      components: [
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`role-selector-${panel.id}`)
+            .setPlaceholder('🎭 Wähle deine Rolle')
+            .addOptions(
+              panel.roles.map(role =>
+                new StringSelectMenuOptionBuilder()
+                  .setLabel(role.label)
+                  .setValue(role.roleId)
+              )
+            )
+        )
+      ]
     });
 
     await interaction.followUp({
